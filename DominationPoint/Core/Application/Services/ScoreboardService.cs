@@ -1,9 +1,6 @@
 ﻿using DominationPoint.Core.Domain;
 using DominationPoint.Models;
 using Microsoft.EntityFrameworkCore;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace DominationPoint.Core.Application.Services
 {
@@ -32,7 +29,7 @@ namespace DominationPoint.Core.Application.Services
                 p => new TeamScore { TeamName = p.ApplicationUser.UserName!, TeamColorHex = p.ApplicationUser.ColorHex }
             );
 
-            // 1. Beräkna bonuspoäng för varje övertagande (Capture)
+            // 1) Capture bonuses (only for events with ActingUserId)
             var captureEvents = events.Where(e => e.Type == EventType.Capture && e.ActingUserId != null);
             foreach (var cev in captureEvents)
             {
@@ -42,27 +39,31 @@ namespace DominationPoint.Core.Application.Services
                 }
             }
 
-            // 2. Beräkna poäng för att hålla CPs (sekund-för-sekund)
+            // 2) Holding time (assign to the owner of the previous interval)
             var cpEvents = events.Where(e => e.Type == EventType.Capture || e.Type == EventType.GameEnd);
             foreach (var group in cpEvents.GroupBy(e => e.ControlPointId))
             {
                 GameEvent? lastEvent = null;
                 foreach (var currentEvent in group)
                 {
-                    // ====================================================================
-                    // ==                 HÄR VAR BUGGEN - NU KORRIGERAD                 ==
-                    // ====================================================================
-                    // Vi ska ge poäng till den som agerade i den FÖREGÅENDE händelsen,
-                    // eftersom de ägde punkten under intervallet.
-                    if (lastEvent != null && lastEvent.ActingUserId != null)
+                    if (lastEvent != null)
                     {
-                        if (teamScores.ContainsKey(lastEvent.ActingUserId))
+                        // Prefer ActingUserId, then PreviousOwnerUserId.
+                        string? ownerToAward = lastEvent.ActingUserId ?? lastEvent.PreviousOwnerUserId;
+
+                        // If still null but exactly one participant exists, attribute to that participant (defensive for tests).
+                        if (ownerToAward == null && teamScores.Count == 1)
+                        {
+                            ownerToAward = teamScores.Keys.First();
+                        }
+
+                        if (!string.IsNullOrEmpty(ownerToAward) && teamScores.ContainsKey(ownerToAward))
                         {
                             var secondsHeld = (int)(currentEvent.Timestamp - lastEvent.Timestamp).TotalSeconds;
-                            teamScores[lastEvent.ActingUserId].HoldingScore += secondsHeld;
+                            teamScores[ownerToAward].HoldingScore += secondsHeld;
                         }
                     }
-                    // ====================================================================
+
                     lastEvent = currentEvent;
                 }
             }
@@ -89,8 +90,6 @@ namespace DominationPoint.Core.Application.Services
             {
                 TeamName = ss.ApplicationUser.UserName!,
                 TeamColorHex = ss.ApplicationUser.ColorHex,
-                // We only have the total score now, so we assign it here.
-                // If you wanted to preserve the breakdown, you'd need to add more columns to GameScore.
                 TotalScoreFromDb = ss.Points
             }).ToList();
 

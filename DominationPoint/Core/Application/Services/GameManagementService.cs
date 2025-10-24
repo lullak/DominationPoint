@@ -1,7 +1,6 @@
 ﻿using DominationPoint.Core.Domain;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using System.Xml.Linq;
 
 namespace DominationPoint.Core.Application.Services
 {
@@ -12,7 +11,7 @@ namespace DominationPoint.Core.Application.Services
         private readonly ILogger<GameManagementService> _logger;
         private readonly IScoreboardService _scoreboardService;
 
-        public GameManagementService(IApplicationDbContext context, ILogger<GameManagementService> logger, UserManager<ApplicationUser> userManager, IScoreboardService scoreboardService) // Modify constructor
+        public GameManagementService(IApplicationDbContext context, ILogger<GameManagementService> logger, UserManager<ApplicationUser> userManager, IScoreboardService scoreboardService) 
         {
             _context = context;
             _logger = logger;
@@ -76,15 +75,11 @@ namespace DominationPoint.Core.Application.Services
                 }
 
                 game.Status = GameStatus.Finished;
-                await _context.SaveChangesAsync(default); // Save events and game status first
+                await _context.SaveChangesAsync(default);
 
-                // ====================================================================
-                // ==                  NEW: FINAL SCORE CALCULATION                  ==
-                // ====================================================================
                 _logger.LogInformation("Calculating final scores for game {GameId}.", id);
                 var finalScoreboard = await _scoreboardService.CalculateScoreboardAsync(id);
 
-                // Clear any "live" scores that were previously calculated
                 var oldScores = await _context.GameScores.Where(gs => gs.GameId == id).ToListAsync();
                 if (oldScores.Any())
                 {
@@ -118,7 +113,6 @@ namespace DominationPoint.Core.Application.Services
                 }
                 else
                 {
-                    // For in-memory/mock queries in tests
                     foreach (var cp in cpsQuery.ToList())
                     {
                         cp.Status = ControlPointStatus.Inactive;
@@ -126,7 +120,7 @@ namespace DominationPoint.Core.Application.Services
                     }
                 }
 
-                await _context.SaveChangesAsync(default); // Save the final scores
+                await _context.SaveChangesAsync(default); 
                 _logger.LogInformation("Game {GameId} has been ended and final scores saved.", id);
             }
         }
@@ -197,7 +191,6 @@ namespace DominationPoint.Core.Application.Services
             }
             else
             {
-                // For in-memory/mock queries in tests
                 return usersQuery.ToList();
             }
         }
