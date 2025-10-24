@@ -53,6 +53,7 @@ namespace DominationPoint.Core.Application.Services
 
         public async Task EndGameAsync(int id)
         {
+            if (id <= 0) return;
             var game = await _context.Games.FindAsync(id);
             if (game != null && game.Status == GameStatus.Active)
             {

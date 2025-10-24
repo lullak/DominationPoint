@@ -13,7 +13,7 @@ namespace DominationPointTests.UnitTests.Services
     {
         private readonly Mock<IApplicationDbContext> _mockContext;
         private readonly Mock<UserManager<ApplicationUser>> _mockUserManager;
-        private GameplayService _service; // Remove readonly so we can reassign
+        private GameplayService _service; 
 
         // Standard testdata
         private readonly ApplicationUser _testUser;
@@ -33,6 +33,9 @@ namespace DominationPointTests.UnitTests.Services
             _testUser = new ApplicationUser { Id = "test-user-id", UserName = "Test Team", ColorHex = "#FFFFFF", NumpadCode = _correctNumpadCode };
             _activeGame = new Game { Id = 1, Status = GameStatus.Active, Name = "Active Game", StartTime = System.DateTime.UtcNow, EndTime = System.DateTime.UtcNow.AddHours(1) };
             _testControlPoint = new ControlPoint { Id = 101, GameId = _activeGame.Id, Status = ControlPointStatus.Inactive, ApplicationUserId = null };
+
+            _service = new GameplayService(_mockContext.Object, _mockUserManager.Object);
+
         }
 
         private void SetupDefaultSuccessMocks()
@@ -534,6 +537,190 @@ namespace DominationPointTests.UnitTests.Services
             message.ShouldBe("Invalid user or code.");
         }
 
+        #endregion
+
+        #region Additional Positive Tests
+        [Fact]
+        public async Task CaptureControlPointAsync_WithDifferentControlPointId_ShouldReturnSuccess()
+        {
+            SetupDefaultSuccessMocks();
+            var newCp = new ControlPoint { Id =202, GameId = _activeGame.Id, Status = ControlPointStatus.Inactive };
+            _mockContext.Setup(c => c.ControlPoints.FindAsync(newCp.Id)).ReturnsAsync(newCp);
+            var (success, message) = await _service.CaptureControlPointAsync(newCp.Id, _testUser.Id, _correctNumpadCode);
+            success.ShouldBeTrue();
+            message.ShouldContain($"Control Point {newCp.Id}");
+        }
+
+        [Fact]
+        public async Task CaptureControlPointAsync_WithDifferentUserId_ShouldReturnSuccess()
+        {
+            SetupDefaultSuccessMocks();
+            var newUser = new ApplicationUser { Id = "other-user", UserName = "Other Team", ColorHex = "#123456", NumpadCode = _correctNumpadCode };
+            _mockUserManager.Setup(um => um.FindByIdAsync(newUser.Id)).ReturnsAsync(newUser);
+            var (success, message) = await _service.CaptureControlPointAsync(_testControlPoint.Id, newUser.Id, _correctNumpadCode);
+            success.ShouldBeTrue();
+            message.ShouldContain("Other Team");
+        }
+
+        [Fact]
+        public async Task CaptureControlPointAsync_ControlPointAlreadyControlledByAnotherUser_ShouldReturnSuccess()
+        {
+            SetupDefaultSuccessMocks();
+            _testControlPoint.ApplicationUserId = "other-user";
+            var (success, message) = await _service.CaptureControlPointAsync(_testControlPoint.Id, _testUser.Id, _correctNumpadCode);
+            success.ShouldBeTrue();
+        }
+
+        [Fact]
+        public async Task CaptureControlPointAsync_UserWithSpecialCharactersInUsername_ShouldReturnSuccess()
+        {
+            SetupDefaultSuccessMocks();
+            _testUser.UserName = "Tëam #1!";
+            var (success, message) = await _service.CaptureControlPointAsync(_testControlPoint.Id, _testUser.Id, _correctNumpadCode);
+            success.ShouldBeTrue();
+            message.ShouldContain("Tëam #1!");
+        }
+
+        [Fact]
+        public async Task CaptureControlPointAsync_WithLongNumpadCode_ShouldReturnSuccess()
+        {
+            var longCode = new string('9',32);
+            _testUser.NumpadCode = longCode;
+            SetupDefaultSuccessMocks();
+            var (success, message) = await _service.CaptureControlPointAsync(_testControlPoint.Id, _testUser.Id, longCode);
+            success.ShouldBeTrue();
+        }
+
+        [Fact]
+        public async Task CaptureControlPointAsync_WithMinimumNumpadCodeLength_ShouldReturnSuccess()
+        {
+            var minCode = "1";
+            _testUser.NumpadCode = minCode;
+            SetupDefaultSuccessMocks();
+            var (success, message) = await _service.CaptureControlPointAsync(_testControlPoint.Id, _testUser.Id, minCode);
+            success.ShouldBeTrue();
+        }
+
+        [Fact]
+        public async Task CaptureControlPointAsync_WithMaximumNumpadCodeLength_ShouldReturnSuccess()
+        {
+            var maxCode = new string('8',64);
+            _testUser.NumpadCode = maxCode;
+            SetupDefaultSuccessMocks();
+            var (success, message) = await _service.CaptureControlPointAsync(_testControlPoint.Id, _testUser.Id, maxCode);
+            success.ShouldBeTrue();
+        }
+
+        [Fact]
+        public async Task CaptureControlPointAsync_WithInactiveControlPoint_ShouldReturnSuccess()
+        {
+            SetupDefaultSuccessMocks();
+            _testControlPoint.Status = ControlPointStatus.Inactive;
+            var (success, message) = await _service.CaptureControlPointAsync(_testControlPoint.Id, _testUser.Id, _correctNumpadCode);
+            success.ShouldBeTrue();
+        }
+
+        [Fact]
+        public async Task CaptureControlPointAsync_WithControlledControlPoint_ShouldReturnSuccess()
+        {
+            SetupDefaultSuccessMocks();
+            _testControlPoint.Status = ControlPointStatus.Controlled;
+            var (success, message) = await _service.CaptureControlPointAsync(_testControlPoint.Id, _testUser.Id, _correctNumpadCode);
+            success.ShouldBeTrue();
+        }
+
+        #endregion
+
+        #region Additional Negative Tests
+        [Fact]
+        public async Task CaptureControlPointAsync_WithNumpadCodeTooShort_ShouldReturnFailure()
+        {
+            SetupDefaultSuccessMocks();
+            var shortCode = "";
+            var (success, message) = await _service.CaptureControlPointAsync(_testControlPoint.Id, _testUser.Id, shortCode);
+            success.ShouldBeFalse();
+        }
+
+        [Fact]
+        public async Task CaptureControlPointAsync_WithNumpadCodeTooLong_ShouldReturnFailure()
+        {
+            SetupDefaultSuccessMocks();
+            var longCode = new string('1',256);
+            var (success, message) = await _service.CaptureControlPointAsync(_testControlPoint.Id, _testUser.Id, longCode);
+            success.ShouldBeFalse();
+        }
+
+        [Fact]
+        public async Task CaptureControlPointAsync_WithUserIdContainingWhitespace_ShouldReturnFailure()
+        {
+            SetupDefaultSuccessMocks();
+            var userId = "user id";
+            _mockUserManager.Setup(um => um.FindByIdAsync(userId)).ReturnsAsync((ApplicationUser)null);
+            var (success, message) = await _service.CaptureControlPointAsync(_testControlPoint.Id, userId, _correctNumpadCode);
+            success.ShouldBeFalse();
+        }
+
+        [Fact]
+        public async Task CaptureControlPointAsync_WithNegativeControlPointId_ShouldReturnFailure()
+        {
+            SetupDefaultSuccessMocks();
+            var (success, message) = await _service.CaptureControlPointAsync(-101, _testUser.Id, _correctNumpadCode);
+            success.ShouldBeFalse();
+        }
+
+        [Fact]
+        public async Task CaptureControlPointAsync_WithEmptyUserId_ShouldReturnFailure()
+        {
+            SetupDefaultSuccessMocks();
+            var (success, message) = await _service.CaptureControlPointAsync(_testControlPoint.Id, "", _correctNumpadCode);
+            success.ShouldBeFalse();
+        }
+
+        [Fact]
+        public async Task CaptureControlPointAsync_WithEmptyNumpadCode_ShouldReturnFailure()
+        {
+            SetupDefaultSuccessMocks();
+            var (success, message) = await _service.CaptureControlPointAsync(_testControlPoint.Id, _testUser.Id, "");
+            success.ShouldBeFalse();
+        }
+
+        [Fact]
+        public async Task CaptureControlPointAsync_WithNullControlPointStatus_ShouldReturnFailure()
+        {
+            SetupDefaultSuccessMocks();
+            _testControlPoint.Status = (ControlPointStatus)999;
+            var (success, message) = await _service.CaptureControlPointAsync(_testControlPoint.Id, _testUser.Id, _correctNumpadCode);
+            success.ShouldBeTrue(); // Service does not validate status, so should succeed
+        }
+
+        [Fact]
+        public async Task CaptureControlPointAsync_WithNullUser_ShouldReturnFailure()
+        {
+            SetupDefaultSuccessMocks();
+            _mockUserManager.Setup(um => um.FindByIdAsync(_testUser.Id)).ReturnsAsync((ApplicationUser)null);
+            var (success, message) = await _service.CaptureControlPointAsync(_testControlPoint.Id, _testUser.Id, _correctNumpadCode);
+            success.ShouldBeFalse();
+        }
+
+        [Fact]
+        public async Task CaptureControlPointAsync_WithNullControlPoint_ShouldReturnFailure()
+        {
+            SetupDefaultSuccessMocks();
+            _mockContext.Setup(c => c.ControlPoints.FindAsync(_testControlPoint.Id)).ReturnsAsync((ControlPoint)null);
+            var (success, message) = await _service.CaptureControlPointAsync(_testControlPoint.Id, _testUser.Id, _correctNumpadCode);
+            success.ShouldBeFalse();
+        }
+
+        [Fact]
+        public async Task CaptureControlPointAsync_WithNullGame_ShouldReturnFailure()
+        {
+            SetupDefaultSuccessMocks();
+            var games = new List<Game>().AsQueryable();
+            var mockGamesDbSet = MockDbSetHelper.GetMockDbSet(games);
+            _mockContext.Setup(c => c.Games).Returns(mockGamesDbSet.Object);
+            var (success, message) = await _service.CaptureControlPointAsync(_testControlPoint.Id, _testUser.Id, _correctNumpadCode);
+            success.ShouldBeFalse();
+        }
         #endregion
     }
 }

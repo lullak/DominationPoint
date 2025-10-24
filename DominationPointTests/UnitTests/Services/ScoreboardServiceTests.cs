@@ -2,7 +2,6 @@
 using DominationPoint.Core.Application.Services;
 using DominationPoint.Core.Domain;
 using DominationPoint.Models;
-using DominationPointTests.UnitTests.Services;
 using Moq;
 using Shouldly;
 
