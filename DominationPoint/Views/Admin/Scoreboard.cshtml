@@ -1,0 +1,34 @@
+﻿@model ScoreboardViewModel
+@{
+    ViewData["Title"] = $"Scoreboard for {Model.Game.Name}";
+    Layout = "_AdminLayout";
+}
+
+<h3>@ViewData["Title"]</h3>
+<p class="text-muted">Game finished at @Model.Game.EndTime.ToString("yyyy-MM-dd HH:mm")</p>
+
+<table class="table table-hover">
+    <thead>
+        <tr>
+            <th>Rank</th>
+            <th>Team</th>
+            <th>Final Score</th>
+        </tr>
+    </thead>
+    <tbody>
+        @{
+            int rank = 1;
+        }
+        @foreach (var score in Model.TeamScores)
+        {
+            <tr>
+                <td><h3>@(rank++)</h3></td>
+                <td style="vertical-align: middle;">
+                    <span style="display:inline-block; width:20px; height:20px; background-color:@score.TeamColorHex; border-radius: 50%; vertical-align: middle; margin-right: 10px;"></span>
+                    <strong>@score.TeamName</strong>
+                </td>
+                <td><h4>@score.TotalScore.ToString("N0")</h4></td>
+            </tr>
+        }
+    </tbody>
+</table>

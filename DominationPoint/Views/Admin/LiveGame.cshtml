@@ -1,0 +1,208 @@
+﻿@using System.Text.Json
+@model LiveGameViewModel
+@{
+    ViewData["Title"] = $"Live: {Model.Game.Name}";
+    Layout = "_AdminLayout";
+    int gridSize = 10;
+}
+
+<style>
+    #map-grid {
+        display: grid;
+        grid-template-columns: repeat( @gridSize, 1fr);
+        grid-template-rows: repeat( @gridSize, 1fr);
+        width: 600px;
+        height: 600px;
+        border: 2px solid white;
+        background-color: black;
+    }
+
+    .grid-cell-container {
+        position: relative;
+        border: 1px solid #444;
+    }
+
+        /* Visuell stil för CPs och gör dem klickbara */
+        .grid-cell-container[data-iscp="true"] {
+            cursor: pointer;
+            border: 2px dashed #0d6efd;
+            box-sizing: border-box;
+        }
+
+    .control-point-marker {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+        z-index: 1;
+        transition: background-color 0.3s;
+    }
+
+    .map-annotation-text {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 14px;
+        font-weight: bold;
+        text-transform: uppercase;
+        text-shadow: 1px 1px 2px black;
+        pointer-events: none;
+        z-index: 2;
+    }
+</style>
+
+<h3>@ViewData["Title"] <span class="badge bg-success">ACTIVE</span></h3>
+
+<div class="row">
+    <div class="col-lg-8">
+        <p>Click a Control Point (marked with a blue border) to assign its owner.</p>
+        <div id="map-grid">
+            @for (int y = 1; y <= gridSize; y++)
+            {
+                @for (int x = 1; x <= gridSize; x++)
+                {
+                    var cp = Model.ControlPoints.FirstOrDefault(p => p.PositionX == x && p.PositionY == y);
+                    var annotation = Model.Annotations.FirstOrDefault(a => a.PositionX == x && a.PositionY == y);
+
+                    // =========================================================================
+                    // == ÄNDRING: Vi använder nu data-attribut för att identifiera cellerna  ==
+                    // =========================================================================
+                    <div class="grid-cell-container"
+                         data-x="@x"
+                         data-y="@y"
+                         data-iscp="@(cp != null ? "true" : "false")"
+                         data-cpid="@(cp?.Id)">
+                        @if (cp != null)
+                        {
+                            var bgColor = cp.ApplicationUser?.ColorHex ?? "#808080";
+                            <div class="control-point-marker" style="background-color: @bgColor;"></div>
+                        }
+                        @if (annotation != null)
+                        {
+                            <div class="map-annotation-text">@annotation.Text</div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <h4>Participating Teams</h4>
+        <ul class="list-group">
+            @foreach (var p in Model.Participants)
+            {
+                <li class="list-group-item">
+                    <span style="display:inline-block; width:20px; height:20px; background-color:@p.ApplicationUser.ColorHex; border-radius: 50%; vertical-align: middle; margin-right: 10px;"></span>
+                    <strong>@p.ApplicationUser.UserName</strong>
+                    <small class="text-muted float-end">Code: @(p.ApplicationUser.NumpadCode ?? "N/A")</small>
+                </li>
+            }
+        </ul>
+    </div>
+</div>
+
+<div class="modal fade" id="editLiveTileModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form asp-action="UpdateLiveTileState" id="liveTileForm" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="gameId" value="@Model.Game.Id" />
+                <input type="hidden" id="cpId" name="cpId" />
+                <div class="modal-header">
+                    <h5 class="modal-title">Update Control Point</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="ownerSelect" class="form-label">Assign Status / Owner</label>
+                        <select id="ownerSelect" name="userId" class="form-select">
+                            <option value="">-- Neutral --</option>
+                            <hr />
+                            @foreach (var p in Model.Participants)
+                            {
+                                <option value="@p.ApplicationUserId" style="background-color: @p.ApplicationUser.ColorHex; color: white; text-shadow: 1px 1px 1px black;">
+                                    @p.ApplicationUser.UserName
+                                </option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Ensure DOM and Bootstrap are ready before wiring events.
+        document.addEventListener('DOMContentLoaded', function () {
+            if (typeof bootstrap === 'undefined' || !bootstrap.Modal) {
+                console.error('Bootstrap JS (bootstrap.Modal) is not available. Make sure Bootstrap script is loaded and _AdminLayout renders the Scripts section.');
+                return;
+            }
+
+            const modalEl = document.getElementById('editLiveTileModal');
+            if (!modalEl) {
+                console.error('Modal element not found: #editLiveTileModal');
+                return;
+            }
+
+            const liveTileModal = new bootstrap.Modal(modalEl);
+
+            const grid = document.getElementById('map-grid');
+            if (!grid) {
+                console.error('Map grid element not found: #map-grid');
+                return;
+            }
+
+            // Serialize control points using camelCase so JS can read properties like `id`, `status`, `applicationUserId`.
+            const controlPoints = @Html.Raw(JsonSerializer.Serialize(Model.ControlPoints, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+
+            grid.addEventListener('click', function (e) {
+                // Find the nearest cell that is a CP (data-iscp="true")
+                const cell = e.target.closest('[data-iscp="true"]');
+
+                if (!cell) {
+                    return;
+                }
+
+                const cpId = parseInt(cell.dataset.cpid);
+                if (isNaN(cpId)) {
+                    console.error('Invalid CP id on clicked tile:', cell.dataset.cpid);
+                    return;
+                }
+
+                const cpData = controlPoints.find(cp => cp.id === cpId);
+
+                if (!cpData) {
+                    console.error("Found a CP tile but could not find its data. CP ID:", cpId);
+                    return;
+                }
+
+                document.getElementById('cpId').value = cpId;
+
+                const ownerSelect = document.getElementById('ownerSelect');
+                if (ownerSelect) {
+                    if (cpData.status === 2) {
+                        ownerSelect.value = "sabotaged";
+                    } else {
+                        ownerSelect.value = cpData.applicationUserId || "";
+                    }
+                }
+
+                liveTileModal.show();
+            });
+        });
+    </script>
+}

@@ -1,0 +1,99 @@
+﻿@model IEnumerable<DominationPoint.Core.Domain.Game>
+
+@{
+    ViewData["Title"] = "Manage Games";
+    Layout = "_AdminLayout";
+}
+
+<h4>Schedule New Game</h4>
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger">@TempData["ErrorMessage"]</div>
+}
+<div class="card mb-4">
+    <div class="card-body">
+        <form asp-action="CreateGame" method="post">
+            <div class="row align-items-end">
+                <div class="col-md-4">
+                    <label for="name" class="form-label">Game Name</label>
+                    <input type="text" name="name" class="form-control" placeholder="E.g., 'Operation Overlord'" required />
+                </div>
+                <div class="col-md-3">
+                    <label for="startTime" class="form-label">Start Time</label>
+                    <input type="datetime-local" name="startTime" class="form-control" required />
+                </div>
+                <div class="col-md-3">
+                    <label for="endTime" class="form-label">End Time</label>
+                    <input type="datetime-local" name="endTime" class="form-control" required />
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">Schedule</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<h4>Game History</h4>
+<table class="table table-striped">
+    <thead class="thead-dark">
+        <tr>
+            <th>Game Name</th>
+            <th>Start Time</th>
+            <th>End Time</th>
+            <th>Status</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td><strong><a asp-action="GameDetails" asp-route-id="@item.Id">@item.Name</a></strong></td>
+                <td>@item.StartTime.ToString("yyyy-MM-dd HH:mm")</td>
+                <td>@item.EndTime.ToString("yyyy-MM-dd HH:mm")</td>
+                <td><span class="badge bg-@GetStatusColor(item.Status)">@item.Status</span></td>
+                <td>
+                    @if (item.Status == DominationPoint.Core.Domain.GameStatus.Scheduled)
+                    {
+                        <form asp-action="StartGame" method="post" class="d-inline">
+                            <input type="hidden" name="id" value="@item.Id" />
+                            <button type="submit" class="btn btn-success btn-sm">Start Now</button>
+                        </form>
+                    }
+                    @if (item.Status == DominationPoint.Core.Domain.GameStatus.Active)
+                    {
+                        <form asp-action="EndGame" method="post" class="d-inline">
+                            <input type="hidden" name="id" value="@item.Id" />
+                            <button type="submit" class="btn btn-warning btn-sm">End Now</button>
+                        </form>
+                        <a asp-action="LiveGame" asp-route-id="@item.Id" class="btn btn-danger btn-sm">
+                            Go Live
+                        </a>
+                    }
+
+                    @if (item.Status == DominationPoint.Core.Domain.GameStatus.Finished)
+                    {
+                        <a asp-action="Scoreboard" asp-route-id="@item.Id" class="btn btn-primary btn-sm">View Scoreboard</a>
+                    }
+
+
+                    <a asp-action="GameDetails" asp-route-id="@item.Id" class="btn btn-info btn-sm">Edit Map & Teams</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@functions {
+    string GetStatusColor(DominationPoint.Core.Domain.GameStatus status)
+    {
+        return status switch
+        {
+            DominationPoint.Core.Domain.GameStatus.Scheduled => "secondary",
+            DominationPoint.Core.Domain.GameStatus.Active => "success",
+            DominationPoint.Core.Domain.GameStatus.Finished => "danger",
+            _ => "light"
+        };
+    }
+}

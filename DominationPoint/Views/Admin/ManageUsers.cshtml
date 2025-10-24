@@ -1,0 +1,49 @@
+﻿@model IEnumerable<DominationPoint.Core.Domain.ApplicationUser>
+
+@{
+    ViewData["Title"] = "Manage Teams";
+    Layout = "_AdminLayout"; // Använder den nya delade admin-layouten
+}
+
+<h1>@ViewData["Title"]</h1>
+
+<p>
+    <a asp-action="CreateTeam" class="btn btn-success">Create New Team</a>
+</p>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success">@TempData["SuccessMessage"]</div>
+}
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Team Name / Email</th>
+            <th>Color</th>
+            <th>Numpad Code</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var user in Model)
+        {
+            <tr>
+                <td>@user.UserName</td>
+                <td>
+                    <span style="display:inline-block; width:20px; height:20px; background-color:@user.ColorHex; border-radius: 3px; border: 1px solid #ccc;"></span>
+                    @user.ColorHex
+                </td>
+                <form asp-action="UpdateNumpadCode" method="post">
+                    <input type="hidden" name="userId" value="@user.Id" />
+                <td>
+                    <input type="text" name="numpadCode" value="@user.NumpadCode" class="form-control form-control-sm" />
+                </td>
+                <td>
+                    <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                </td>
+                </form>
+            </tr>
+        }
+    </tbody>
+</table>
