@@ -13,6 +13,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.10" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="9.0.10" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.10" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
     <PackageReference Include="Microsoft.Playwright.Xunit" Version="1.55.0" />
@@ -31,7 +32,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="IntegrationTests\" />
+    <Folder Include="IntegrationTests\Controllers\" />
     <Folder Include="UITests\" />
   </ItemGroup>
 

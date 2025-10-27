@@ -11,10 +11,12 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlite(connectionString));
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseSqlite(connectionString));
+}
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options => {
     options.SignIn.RequireConfirmedAccount = false;
@@ -96,9 +98,15 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Account}/{action=Login}/{id?}");
 
-using (var scope = app.Services.CreateScope())
+// Kör endast seedning om det INTE är testmiljö
+if (!app.Environment.IsEnvironment("Testing"))
 {
-    await SeedData.Initialize(scope.ServiceProvider);
+    using (var scope = app.Services.CreateScope())
+    {
+        await SeedData.Initialize(scope.ServiceProvider);
+    }
 }
 
 app.Run();
+
+public partial class Program { }

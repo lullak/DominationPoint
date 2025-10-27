@@ -1,17 +1,10 @@
-﻿using DominationPoint.Core.Application.HostedServices;
-using DominationPoint.Core.Application;
+﻿using DominationPoint.Core.Application;
+using DominationPoint.Core.Application.HostedServices;
 using DominationPoint.Core.Domain;
 using DominationPoint.Models;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Xunit;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using System;
 
 namespace DominationPointTests.UnitTests.Services.Hosted
 {

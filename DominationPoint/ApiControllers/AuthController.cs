@@ -26,39 +26,57 @@
         [HttpPost("token")]
         public async Task<IActionResult> GetToken([FromBody] LoginRequest request)
         {
-            var user = await _userManager.FindByEmailAsync(request.Email);
-            if (user != null && await _userManager.CheckPasswordAsync(user, request.Password))
+            if (request == null || string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Password))
             {
-                var userRoles = await _userManager.GetRolesAsync(user);
-
-                var authClaims = new List<Claim>
-            {
-                new Claim(ClaimTypes.NameIdentifier, user.Id), 
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            };
-
-                foreach (var userRole in userRoles)
-                {
-                    authClaims.Add(new Claim(ClaimTypes.Role, userRole));
-                }
-
-                var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
-
-                var token = new JwtSecurityToken(
-                    issuer: _configuration["Jwt:Issuer"],
-                    audience: _configuration["Jwt:Audience"],
-                    expires: DateTime.Now.AddHours(3),
-                    claims: authClaims,
-                    signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
-                );
-
-                return Ok(new
-                {
-                    token = new JwtSecurityTokenHandler().WriteToken(token),
-                    expiration = token.ValidTo
-                });
+                return Unauthorized(new { error = "Invalid request" });
             }
-            return Unauthorized();
+
+            var user = await _userManager.FindByEmailAsync(request.Email);
+            if (user == null)
+            {
+                return Unauthorized(new { error = "User not found" });
+            }
+
+            var passwordValid = await _userManager.CheckPasswordAsync(user, request.Password);
+            if (!passwordValid)
+            {
+                return Unauthorized(new { error = "Invalid password" });
+            }
+
+            var userRoles = await _userManager.GetRolesAsync(user);
+            var authClaims = new List<Claim>
+    {
+        new Claim(ClaimTypes.NameIdentifier, user.Id),
+        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+    };
+
+            foreach (var userRole in userRoles)
+            {
+                authClaims.Add(new Claim(ClaimTypes.Role, userRole));
+            }
+
+            var jwtKey = _configuration["Jwt:Key"];
+            if (string.IsNullOrEmpty(jwtKey))
+            {
+                return StatusCode(500, new { error = "JWT configuration missing" });
+            }
+
+            var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
+
+            var token = new JwtSecurityToken(
+                issuer: _configuration["Jwt:Issuer"],
+                audience: _configuration["Jwt:Audience"],
+                expires: DateTime.Now.AddHours(3),
+                claims: authClaims,
+                signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
+            );
+
+            return Ok(new
+            {
+                token = new JwtSecurityTokenHandler().WriteToken(token),
+                expiration = token.ValidTo
+            });
         }
+
     }
 }
