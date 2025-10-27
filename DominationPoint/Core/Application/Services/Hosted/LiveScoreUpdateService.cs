@@ -26,58 +26,64 @@ namespace DominationPoint.Core.Application.HostedServices
         private async void DoWork(object? state)
         {
             _logger.LogInformation("Live Score Update Service is running.");
-
-            // Create a new scope to resolve scoped services like DbContext
-            using (var scope = _serviceProvider.CreateScope())
+            try
             {
-                var context = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
-                var scoreboardService = scope.ServiceProvider.GetRequiredService<IScoreboardService>();
-
-                // Find all currently active games
-                var activeGames = await context.Games
-                    .Where(g => g.Status == Domain.GameStatus.Active)
-                    .ToListAsync();
-
-                if (!activeGames.Any())
+                // Create a new scope to resolve scoped services like DbContext
+                using (var scope = _serviceProvider.CreateScope())
                 {
-                    _logger.LogInformation("No active games to score.");
-                    return;
-                }
+                    var context = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+                    var scoreboardService = scope.ServiceProvider.GetRequiredService<IScoreboardService>();
 
-                foreach (var game in activeGames)
-                {
-                    _logger.LogInformation("Calculating live scores for game: {GameName}", game.Name);
-                    var scoreboard = await scoreboardService.CalculateScoreboardAsync(game.Id);
+                    // Find all currently active games
+                    var activeGames = await context.Games
+                        .Where(g => g.Status == Domain.GameStatus.Active)
+                        .ToListAsync();
 
-                    // Clear previous "live" scores for this game
-                    var oldScores = await context.GameScores.Where(gs => gs.GameId == game.Id).ToListAsync();
-                    if (oldScores.Any())
+                    if (!activeGames.Any())
                     {
-                        context.GameScores.RemoveRange(oldScores);
+                        _logger.LogInformation("No active games to score.");
+                        return;
                     }
 
-                    // Save the new scores
-                    foreach (var teamScore in scoreboard.TeamScores)
+                    foreach (var game in activeGames)
                     {
-                        // Find the user ID for the team name
-                        var participant = await context.GameParticipants
-                            .Include(p => p.ApplicationUser)
-                            .FirstOrDefaultAsync(p => p.GameId == game.Id && p.ApplicationUser.UserName == teamScore.TeamName);
+                        _logger.LogInformation("Calculating live scores for game: {GameName}", game.Name);
+                        var scoreboard = await scoreboardService.CalculateScoreboardAsync(game.Id);
 
-                        if (participant != null)
+                        // Clear previous "live" scores for this game
+                        var oldScores = await context.GameScores.Where(gs => gs.GameId == game.Id).ToListAsync();
+                        if (oldScores.Any())
                         {
-                            var newScore = new GameScore
-                            {
-                                GameId = game.Id,
-                                ApplicationUserId = participant.ApplicationUserId,
-                                Points = teamScore.TotalScore
-                            };
-                            context.GameScores.Add(newScore);
+                            context.GameScores.RemoveRange(oldScores);
                         }
+
+                        // Save the new scores
+                        foreach (var teamScore in scoreboard.TeamScores)
+                        {
+                            // Find the user ID for the team name
+                            var participant = await context.GameParticipants
+                                .Include(p => p.ApplicationUser)
+                                .FirstOrDefaultAsync(p => p.GameId == game.Id && p.ApplicationUser.UserName == teamScore.TeamName);
+
+                            if (participant != null)
+                            {
+                                var newScore = new GameScore
+                                {
+                                    GameId = game.Id,
+                                    ApplicationUserId = participant.ApplicationUserId,
+                                    Points = teamScore.TotalScore
+                                };
+                                context.GameScores.Add(newScore);
+                            }
+                        }
+                        await context.SaveChangesAsync(default);
+                        _logger.LogInformation("Successfully updated live scores for game: {GameName}", game.Name);
                     }
-                    await context.SaveChangesAsync(default);
-                    _logger.LogInformation("Successfully updated live scores for game: {GameName}", game.Name);
                 }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while updating live scores.");
             }
         }
 
