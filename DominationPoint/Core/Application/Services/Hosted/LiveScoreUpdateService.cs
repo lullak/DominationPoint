@@ -11,8 +11,8 @@ namespace DominationPoint.Core.Application.HostedServices
 
         public LiveScoreUpdateService(ILogger<LiveScoreUpdateService> logger, IServiceProvider serviceProvider)
         {
-            _logger = logger;
-            _serviceProvider = serviceProvider;
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
