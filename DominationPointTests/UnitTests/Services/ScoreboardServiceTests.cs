@@ -58,6 +58,137 @@ namespace DominationPointTests.UnitTests.Services
         }
 
         [Fact]
+        public async Task CalculateScoreboardAsync_EventWithNullActingAndPreviousOwner_SingleParticipant_ShouldAttributeToParticipant()
+        {
+            // ARRANGE - This tests the defensive code: "if exactly one participant exists, attribute to that participant"
+            var gameId = 1;
+            var t1 = _testGame.StartTime.AddMinutes(1);
+            var t2 = t1.AddSeconds(30);
+
+            // Only ONE participant
+            var participants = new List<GameParticipant>
+    {
+        new GameParticipant { GameId = gameId, ApplicationUserId = _teamRedUser.Id, ApplicationUser = _teamRedUser }
+    }.AsQueryable();
+            _mockContext.Setup(c => c.GameParticipants).Returns(MockDbSetHelper.GetMockDbSet(participants).Object);
+
+            // Event with BOTH ActingUserId and PreviousOwnerUserId as NULL
+            var events = new List<GameEvent>
+    {
+        new GameEvent { GameId = gameId, ControlPointId = 1, Type = EventType.Capture, ActingUserId = null, PreviousOwnerUserId = null, Timestamp = t1 },
+        new GameEvent { GameId = gameId, ControlPointId = 1, Type = EventType.GameEnd, ActingUserId = null, PreviousOwnerUserId = null, Timestamp = t2 }
+    }.AsQueryable();
+            _mockContext.Setup(c => c.GameEvents).Returns(MockDbSetHelper.GetMockDbSet(events).Object);
+
+            // ACT
+            var result = await _service.CalculateScoreboardAsync(gameId);
+
+            // ASSERT
+            result.TeamScores.ShouldHaveSingleItem();
+            result.TeamScores.Single().HoldingScore.ShouldBe(30); // Should be attributed to the single participant
+        }
+
+        [Fact]
+        public async Task CalculateScoreboardAsync_EventWithNullActingUser_ShouldUsePreviousOwnerUserId()
+        {
+            // ARRANGE - Tests the fallback: ownerToAward = lastEvent.ActingUserId ?? lastEvent.PreviousOwnerUserId
+            var gameId = 1;
+            var t1 = _testGame.StartTime.AddMinutes(1);
+            var t2 = t1.AddSeconds(40);
+
+            var participants = new List<GameParticipant>
+    {
+        new GameParticipant { GameId = gameId, ApplicationUserId = _teamRedUser.Id, ApplicationUser = _teamRedUser },
+        new GameParticipant { GameId = gameId, ApplicationUserId = _teamBlueUser.Id, ApplicationUser = _teamBlueUser }
+    }.AsQueryable();
+            _mockContext.Setup(c => c.GameParticipants).Returns(MockDbSetHelper.GetMockDbSet(participants).Object);
+
+            var events = new List<GameEvent>
+    {
+        // First capture by Red
+        new GameEvent { GameId = gameId, ControlPointId = 1, Type = EventType.Capture, ActingUserId = _teamRedUser.Id, PreviousOwnerUserId = null, Timestamp = t1 },
+        // Second capture with NULL ActingUserId but PreviousOwnerUserId set to Red
+        new GameEvent { GameId = gameId, ControlPointId = 1, Type = EventType.Capture, ActingUserId = null, PreviousOwnerUserId = _teamRedUser.Id, Timestamp = t2 }
+    }.AsQueryable();
+            _mockContext.Setup(c => c.GameEvents).Returns(MockDbSetHelper.GetMockDbSet(events).Object);
+
+            // ACT
+            var result = await _service.CalculateScoreboardAsync(gameId);
+
+            // ASSERT
+            var teamRedScore = result.TeamScores.First(t => t.TeamName == "Team Red");
+            teamRedScore.HoldingScore.ShouldBe(40); // Red held for 40 seconds using PreviousOwnerUserId
+            teamRedScore.CaptureBonusScore.ShouldBe(100); // Bonus for first capture
+        }
+
+        [Fact]
+        public async Task CalculateScoreboardAsync_EventWithNullOwner_MultipleParticipants_ShouldNotAwardHolding()
+        {
+            // ARRANGE - Tests that holding score is NOT awarded when ownerToAward is null and multiple participants exist
+            var gameId = 1;
+            var t1 = _testGame.StartTime.AddMinutes(1);
+            var t2 = t1.AddSeconds(30);
+
+            // TWO participants
+            var participants = new List<GameParticipant>
+    {
+        new GameParticipant { GameId = gameId, ApplicationUserId = _teamRedUser.Id, ApplicationUser = _teamRedUser },
+        new GameParticipant { GameId = gameId, ApplicationUserId = _teamBlueUser.Id, ApplicationUser = _teamBlueUser }
+    }.AsQueryable();
+            _mockContext.Setup(c => c.GameParticipants).Returns(MockDbSetHelper.GetMockDbSet(participants).Object);
+
+            // Events with NULL ActingUserId and PreviousOwnerUserId
+            var events = new List<GameEvent>
+    {
+        new GameEvent { GameId = gameId, ControlPointId = 1, Type = EventType.Capture, ActingUserId = null, PreviousOwnerUserId = null, Timestamp = t1 },
+        new GameEvent { GameId = gameId, ControlPointId = 1, Type = EventType.GameEnd, ActingUserId = null, PreviousOwnerUserId = null, Timestamp = t2 }
+    }.AsQueryable();
+            _mockContext.Setup(c => c.GameEvents).Returns(MockDbSetHelper.GetMockDbSet(events).Object);
+
+            // ACT
+            var result = await _service.CalculateScoreboardAsync(gameId);
+
+            // ASSERT
+            result.TeamScores.Count.ShouldBe(2);
+            result.TeamScores.All(t => t.HoldingScore == 0).ShouldBeTrue(); // No holding score awarded
+        }
+
+        [Fact]
+        public async Task CalculateScoreboardAsync_EventOwnerNotInParticipants_ShouldNotAwardHolding()
+        {
+            // ARRANGE - Tests the check: teamScores.ContainsKey(ownerToAward)
+            var gameId = 1;
+            var nonParticipantId = "ghost-user-id";
+            var t1 = _testGame.StartTime.AddMinutes(1);
+            var t2 = t1.AddSeconds(30);
+
+            // Only Blue is a participant
+            var participants = new List<GameParticipant>
+    {
+        new GameParticipant { GameId = gameId, ApplicationUserId = _teamBlueUser.Id, ApplicationUser = _teamBlueUser }
+    }.AsQueryable();
+            _mockContext.Setup(c => c.GameParticipants).Returns(MockDbSetHelper.GetMockDbSet(participants).Object);
+
+            // Event where ghost user captures
+            var events = new List<GameEvent>
+    {
+        new GameEvent { GameId = gameId, ControlPointId = 1, Type = EventType.Capture, ActingUserId = nonParticipantId, PreviousOwnerUserId = null, Timestamp = t1 },
+        new GameEvent { GameId = gameId, ControlPointId = 1, Type = EventType.Capture, ActingUserId = _teamBlueUser.Id, PreviousOwnerUserId = nonParticipantId, Timestamp = t2 }
+    }.AsQueryable();
+            _mockContext.Setup(c => c.GameEvents).Returns(MockDbSetHelper.GetMockDbSet(events).Object);
+
+            // ACT
+            var result = await _service.CalculateScoreboardAsync(gameId);
+
+            // ASSERT
+            result.TeamScores.ShouldHaveSingleItem();
+            var blueScore = result.TeamScores.Single();
+            blueScore.HoldingScore.ShouldBe(0); // Ghost user was not awarded holding time
+            blueScore.CaptureBonusScore.ShouldBe(100); // Blue gets bonus for capture
+        }
+
+
+        [Fact]
         public async Task CalculateScoreboardAsync_TeamHoldsPointFor60Seconds_ShouldAwardCorrectHoldingScore()
         {
             // ARRANGE

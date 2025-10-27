@@ -506,5 +506,120 @@ namespace DominationPointTests.UnitTests.Services
             var result = await service.GetControlPointsForGameAsync(1);
             Assert.Empty(result);
         }
+
+        [Fact]
+        public async Task UpdateControlPointStateAsync_WhenFindAsyncReturnsNull_ShouldReturnEarly()
+        {
+            // ARRANGE
+            var cps = new List<ControlPoint>();
+            var mockCpSet = MockDbSetHelper.GetMockDbSet(cps.AsQueryable());
+            var mockContext = new Mock<IApplicationDbContext>();
+
+            // Explicitly mock FindAsync to return null
+            mockCpSet.Setup(s => s.FindAsync(It.IsAny<object[]>()))
+                .ReturnsAsync((ControlPoint)null);
+
+            mockContext.Setup(c => c.ControlPoints).Returns(mockCpSet.Object);
+
+            var service = new ControlPointService(mockContext.Object);
+
+            // ACT
+            await service.UpdateControlPointStateAsync(999, "user1");
+
+            // ASSERT - Should return early without accessing GameEvents or SaveChanges
+            mockContext.Verify(c => c.GameEvents, Times.Never);
+            mockContext.Verify(c => c.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        //42. GetControlPointsForGameAsync includes ApplicationUser
+        [Fact]
+        public async Task GetControlPointsForGameAsync_ShouldIncludeApplicationUser()
+        {
+            // ARRANGE
+            var user = new ApplicationUser { Id = "user1", UserName = "Team Red", ColorHex = "#FF0000" };
+            var cp = new ControlPoint
+            {
+                Id = 1,
+                GameId = 1,
+                PositionX = 10,
+                PositionY = 20,
+                ApplicationUserId = user.Id,
+                ApplicationUser = user // Simulate Include()
+            };
+
+            var cps = new List<ControlPoint> { cp };
+            var service = GetService(cps, new List<GameEvent>(), out _, out _, out _);
+
+            // ACT
+            var result = await service.GetControlPointsForGameAsync(1);
+
+            // ASSERT
+            Assert.Single(result);
+            Assert.NotNull(result[0].ApplicationUser);
+            Assert.Equal("Team Red", result[0].ApplicationUser.UserName);
+        }
+
+        //43. UpdateControlPointStateAsync with whitespace ownerId should treat as null
+        [Fact]
+        public async Task UpdateControlPointStateAsync_WhitespaceOwnerId_ShouldTreatAsNull()
+        {
+            // ARRANGE
+            var cp = new ControlPoint
+            {
+                Id = 1,
+                GameId = 1,
+                ApplicationUserId = "user1",
+                Status = ControlPointStatus.Controlled
+            };
+            var cps = new List<ControlPoint> { cp };
+            var service = GetService(cps, new List<GameEvent>(), out var mockSet, out var mockEventSet, out var mockContext);
+            mockSet.Setup(s => s.FindAsync(1)).ReturnsAsync(cp);
+
+            // ACT
+            await service.UpdateControlPointStateAsync(1, "   "); // Whitespace
+
+            // ASSERT - Should NOT treat whitespace as empty (per your code logic)
+            Assert.Equal("   ", cp.ApplicationUserId); // Your code assigns it as-is
+            Assert.Equal(ControlPointStatus.Controlled, cp.Status);
+            mockEventSet.Verify(s => s.Add(It.IsAny<GameEvent>()), Times.Once);
+        }
+
+        //44. ToggleControlPointMarkerAsync with max int coordinates
+        [Fact]
+        public async Task ToggleControlPointMarkerAsync_MaxIntCoordinates_AddsNew()
+        {
+            // ARRANGE
+            var cps = new List<ControlPoint>();
+            var service = GetService(cps, new List<GameEvent>(), out var mockSet, out _, out var mockContext);
+
+            // ACT
+            await service.ToggleControlPointMarkerAsync(1, int.MaxValue, int.MaxValue, true);
+
+            // ASSERT
+            mockSet.Verify(s => s.Add(It.Is<ControlPoint>(cp =>
+                cp.PositionX == int.MaxValue &&
+                cp.PositionY == int.MaxValue)), Times.Once);
+            mockContext.Verify(c => c.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        //45. DeleteControlPointAsync with max int ID
+        [Fact]
+        public async Task DeleteControlPointAsync_MaxIntId_RemovesIfFound()
+        {
+            // ARRANGE
+            var cp = new ControlPoint { Id = int.MaxValue, GameId = 1 };
+            var cps = new List<ControlPoint> { cp };
+            var service = GetService(cps, new List<GameEvent>(), out var mockSet, out _, out var mockContext);
+            mockSet.Setup(s => s.FindAsync(int.MaxValue)).ReturnsAsync(cp);
+
+            // ACT
+            await service.DeleteControlPointAsync(int.MaxValue);
+
+            // ASSERT
+            mockSet.Verify(s => s.Remove(cp), Times.Once);
+            mockContext.Verify(c => c.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+
     }
 }

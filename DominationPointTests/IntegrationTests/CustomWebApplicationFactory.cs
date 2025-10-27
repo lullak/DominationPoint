@@ -7,10 +7,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 public class CustomWebApplicationFactory<TStartup> : WebApplicationFactory<TStartup> where TStartup : class
 {
@@ -38,13 +35,10 @@ public class CustomWebApplicationFactory<TStartup> : WebApplicationFactory<TStar
 
         builder.ConfigureTestServices(services =>
         {
-            // Remove the existing DbContext registration
-            var descriptor = services.SingleOrDefault(
-                d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
-            if (descriptor != null)
-            {
-                services.Remove(descriptor);
-            }
+            // Remove any existing DbContext/ApplicationDbContext registrations to avoid multiple providers
+            // Remove registrations for DbContextOptions<ApplicationDbContext> and ApplicationDbContext
+            services.RemoveAll(typeof(DbContextOptions<ApplicationDbContext>));
+            services.RemoveAll(typeof(ApplicationDbContext));
 
             // Add in-memory database with instance-specific name
             services.AddDbContext<ApplicationDbContext>(options =>

@@ -894,6 +894,39 @@ namespace DominationPointTests.IntegrationTests.Infrastructure
         }
 
         #endregion
+        [Fact]
+        public void OnModelCreating_ShouldConfigureGameParticipantCompositeKey()
+        {
+            // Test that GameParticipant has composite key (GameId, ApplicationUserId)
+            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+                .UseInMemoryDatabase(databaseName: "TestDb")
+                .Options;
+
+            using var context = new ApplicationDbContext(options);
+            var model = context.Model;
+            var entityType = model.FindEntityType(typeof(GameParticipant));
+
+            var keys = entityType.FindPrimaryKey();
+            keys.Properties.Count.ShouldBe(2);
+            keys.Properties.Select(p => p.Name).ShouldContain("GameId");
+            keys.Properties.Select(p => p.Name).ShouldContain("ApplicationUserId");
+        }
+
+        [Fact]
+        public void OnModelCreating_ShouldConfigureGameRelationships()
+        {
+            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+                .UseInMemoryDatabase(databaseName: $"TestDb_{Guid.NewGuid()}")
+                .Options;
+
+            using var context = new ApplicationDbContext(options);
+            var model = context.Model;
+            var gameEntity = model.FindEntityType(typeof(Game));
+
+            var navigations = gameEntity.GetNavigations();
+            navigations.Count().ShouldBeGreaterThan(0); // Now this will pass!
+        }
+
 
     }
 }

@@ -434,5 +434,136 @@ namespace DominationPointTests.UnitTests.Services
             await service.SetAnnotationAsync(99,99,99, " ");
             mockSet.Verify(s => s.Remove(It.IsAny<MapAnnotation>()), Times.Never);
         }
+
+        //41. SetAnnotationAsync with text length 4 should trim to 3
+        [Fact]
+        public async Task SetAnnotationAsync_TextLength4_ShouldTrimTo3()
+        {
+            // ARRANGE
+            var annotations = new List<MapAnnotation>();
+            var service = GetService(annotations, out var mockSet, out _);
+
+            // ACT
+            await service.SetAnnotationAsync(1, 1, 1, "ABCD"); // Exactly 4 characters
+
+            // ASSERT
+            mockSet.Verify(s => s.Add(It.Is<MapAnnotation>(a => a.Text == "ABC")), Times.Once);
+        }
+
+        //42. SetAnnotationAsync updates existing with text length 3 (no trim)
+        [Fact]
+        public async Task SetAnnotationAsync_UpdatesExisting_TextLength3_NoTrim()
+        {
+            // ARRANGE
+            var annotation = new MapAnnotation { Id = 1, GameId = 1, PositionX = 1, PositionY = 1, Text = "OLD" };
+            var annotations = new List<MapAnnotation> { annotation };
+            var service = GetService(annotations, out _, out var mockContext);
+
+            // ACT
+            await service.SetAnnotationAsync(1, 1, 1, "NEW"); // Exactly 3 characters
+
+            // ASSERT
+            Assert.Equal("NEW", annotation.Text);
+            mockContext.Verify(c => c.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        //43. SetAnnotationAsync removes existing annotation if text is null
+        [Fact]
+        public async Task SetAnnotationAsync_RemovesExistingAnnotation_IfTextNull()
+        {
+            // ARRANGE
+            var annotation = new MapAnnotation { Id = 1, GameId = 1, PositionX = 1, PositionY = 1, Text = "OLD" };
+            var annotations = new List<MapAnnotation> { annotation };
+            var service = GetService(annotations, out var mockSet, out var mockContext);
+
+            // ACT
+            await service.SetAnnotationAsync(1, 1, 1, null);
+
+            // ASSERT
+            mockSet.Verify(s => s.Remove(annotation), Times.Once);
+            mockContext.Verify(c => c.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        //44. SetAnnotationAsync removes existing annotation if text is empty string
+        [Fact]
+        public async Task SetAnnotationAsync_RemovesExistingAnnotation_IfTextEmpty()
+        {
+            // ARRANGE
+            var annotation = new MapAnnotation { Id = 1, GameId = 1, PositionX = 1, PositionY = 1, Text = "OLD" };
+            var annotations = new List<MapAnnotation> { annotation };
+            var service = GetService(annotations, out var mockSet, out var mockContext);
+
+            // ACT
+            await service.SetAnnotationAsync(1, 1, 1, "");
+
+            // ASSERT
+            mockSet.Verify(s => s.Remove(annotation), Times.Once);
+            mockContext.Verify(c => c.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        //45. SetAnnotationAsync removes annotation if text is multiple spaces
+        [Fact]
+        public async Task SetAnnotationAsync_RemovesAnnotation_IfTextMultipleSpaces()
+        {
+            // ARRANGE
+            var annotation = new MapAnnotation { Id = 1, GameId = 1, PositionX = 1, PositionY = 1, Text = "OLD" };
+            var annotations = new List<MapAnnotation> { annotation };
+            var service = GetService(annotations, out var mockSet, out var mockContext);
+
+            // ACT
+            await service.SetAnnotationAsync(1, 1, 1, "   "); // Multiple spaces
+
+            // ASSERT
+            mockSet.Verify(s => s.Remove(annotation), Times.Once);
+            mockContext.Verify(c => c.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        //46. SetAnnotationAsync with max int coordinates adds annotation
+        [Fact]
+        public async Task SetAnnotationAsync_MaxIntCoordinates_AddsAnnotation()
+        {
+            // ARRANGE
+            var annotations = new List<MapAnnotation>();
+            var service = GetService(annotations, out var mockSet, out _);
+
+            // ACT
+            await service.SetAnnotationAsync(1, int.MaxValue, int.MaxValue, "MAX");
+
+            // ASSERT
+            mockSet.Verify(s => s.Add(It.Is<MapAnnotation>(a =>
+                a.PositionX == int.MaxValue &&
+                a.PositionY == int.MaxValue &&
+                a.Text == "MAX")), Times.Once);
+        }
+
+        //47. GetAnnotationsForGameAsync with zero gameId returns empty
+        [Fact]
+        public async Task GetAnnotationsForGameAsync_ZeroGameId_ReturnsEmpty()
+        {
+            // ARRANGE
+            var annotations = GetSampleAnnotations();
+            var service = GetService(annotations, out _, out _);
+
+            // ACT
+            var result = await service.GetAnnotationsForGameAsync(0);
+
+            // ASSERT
+            Assert.Empty(result);
+        }
+        //48. SetAnnotationAsync updates existing and trims to exactly 3 characters
+        [Fact]
+        public async Task SetAnnotationAsync_UpdatesExisting_TrimsToExactly3()
+        {
+            // ARRANGE
+            var annotation = new MapAnnotation { Id = 1, GameId = 1, PositionX = 1, PositionY = 1, Text = "AB" };
+            var annotations = new List<MapAnnotation> { annotation };
+            var service = GetService(annotations, out _, out _);
+
+            // ACT
+            await service.SetAnnotationAsync(1, 1, 1, "ABCDEFGH"); // 8 characters
+
+            // ASSERT
+            Assert.Equal("ABC", annotation.Text); // Should be trimmed to exactly 3
+        }
     }
 }
