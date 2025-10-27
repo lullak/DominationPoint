@@ -24,6 +24,7 @@ namespace DominationPointTests.IntegrationTests.ApiControllers
     using Shouldly;
     using Xunit;
 
+    [Collection("Integration Tests")]
     public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory<Program>>
     {
         private readonly HttpClient _client;

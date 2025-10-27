@@ -1,0 +1,6 @@
+<Project>
+ <PropertyGroup>
+ <!-- Ensure coverlet exclusion applies to projects under solution (adjust path if needed) -->
+ <ExcludeByFile>**/DominationPoint/Migrations/ApplicationDbContextModelSnapshot*.cs;**/DominationPoint/Migrations/*InitialCreate*.cs</ExcludeByFile>
+ </PropertyGroup>
+</Project>

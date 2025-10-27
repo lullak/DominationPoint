@@ -1021,5 +1021,287 @@ namespace DominationPointTests.UnitTests.Services
             result.ShouldBeEmpty();
         }
         #endregion
+
+
+        #region ResetGameAsync Tests
+
+        [Fact]
+        public async Task ResetGameAsync_ShouldCallEndGameAsync()
+        {
+            // ARRANGE
+            var gameId = 10;
+            var game = new Game
+            {
+                Id = gameId,
+                Name = "Active Game",
+                Status = GameStatus.Active,
+                StartTime = DateTime.UtcNow,
+                EndTime = DateTime.UtcNow.AddHours(1)
+            };
+
+            var emptyControlPoints = new List<ControlPoint>().AsQueryable();
+            var emptyGameScores = new List<GameScore>().AsQueryable();
+            var emptyGameParticipants = new List<GameParticipant>().AsQueryable();
+
+            _mockContext.Setup(c => c.Games.FindAsync(gameId)).ReturnsAsync(game);
+            _mockContext.Setup(c => c.ControlPoints).Returns(MockDbSetHelper.GetMockDbSet(emptyControlPoints).Object);
+            _mockContext.Setup(c => c.GameScores).Returns(MockDbSetHelper.GetMockDbSet(emptyGameScores).Object);
+            _mockContext.Setup(c => c.GameParticipants).Returns(MockDbSetHelper.GetMockDbSet(emptyGameParticipants).Object);
+            _mockContext.Setup(c => c.GameEvents).Returns(MockDbSetHelper.GetMockDbSet(new List<GameEvent>().AsQueryable()).Object);
+
+            _mockScoreboardService.Setup(s => s.CalculateScoreboardAsync(gameId))
+                .ReturnsAsync(new ScoreboardViewModel { TeamScores = new List<TeamScore>() });
+
+            // ACT
+            await _service.ResetGameAsync(gameId);
+
+            // ASSERT
+            game.Status.ShouldBe(GameStatus.Finished);
+            _mockContext.Verify(c => c.SaveChangesAsync(default), Times.AtLeastOnce);
+        }
+
+        [Fact]
+        public async Task ResetGameAsync_WithNonExistentGame_ShouldDoNothing()
+        {
+            // ARRANGE
+            var gameId = 999;
+            _mockContext.Setup(c => c.Games.FindAsync(gameId)).ReturnsAsync((Game)null);
+
+            // ACT
+            await _service.ResetGameAsync(gameId);
+
+            // ASSERT
+            _mockContext.Verify(c => c.SaveChangesAsync(default), Times.Never);
+        }
+
+        [Fact]
+        public async Task ResetGameAsync_WithScheduledGame_ShouldNotEnd()
+        {
+            // ARRANGE
+            var gameId = 11;
+            var game = new Game
+            {
+                Id = gameId,
+                Name = "Scheduled Game",
+                Status = GameStatus.Scheduled,
+                StartTime = DateTime.UtcNow,
+                EndTime = DateTime.UtcNow.AddHours(1)
+            };
+
+            _mockContext.Setup(c => c.Games.FindAsync(gameId)).ReturnsAsync(game);
+
+            // ACT
+            await _service.ResetGameAsync(gameId);
+
+            // ASSERT
+            game.Status.ShouldBe(GameStatus.Scheduled);
+            _mockContext.Verify(c => c.SaveChangesAsync(default), Times.Never);
+        }
+
+        #endregion
+
+        #region EndGameAsync Additional Edge Cases
+
+        [Fact]
+        public async Task EndGameAsync_WithOwnedControlPoints_ShouldCreateGameEndEvents()
+        {
+            // ARRANGE
+            var gameId = 20;
+            var userId = "user123";
+            var game = new Game
+            {
+                Id = gameId,
+                Name = "Game With Owned CPs",
+                Status = GameStatus.Active,
+                StartTime = DateTime.UtcNow,
+                EndTime = DateTime.UtcNow.AddHours(1)
+            };
+
+            var ownedControlPoints = new List<ControlPoint>
+    {
+        new ControlPoint { Id = 1, GameId = gameId, ApplicationUserId = userId, PositionX = 1, PositionY = 1 },
+        new ControlPoint { Id = 2, GameId = gameId, ApplicationUserId = userId, PositionX = 2, PositionY = 2 }
+    }.AsQueryable();
+
+            var mockCpDbSet = MockDbSetHelper.GetMockDbSet(ownedControlPoints);
+            var mockGameEventsDbSet = MockDbSetHelper.GetMockDbSet(new List<GameEvent>().AsQueryable());
+            var mockGameScoresDbSet = MockDbSetHelper.GetMockDbSet(new List<GameScore>().AsQueryable());
+            var mockGameParticipantsDbSet = MockDbSetHelper.GetMockDbSet(new List<GameParticipant>().AsQueryable());
+
+            _mockContext.Setup(c => c.Games.FindAsync(gameId)).ReturnsAsync(game);
+            _mockContext.Setup(c => c.ControlPoints).Returns(mockCpDbSet.Object);
+            _mockContext.Setup(c => c.GameEvents).Returns(mockGameEventsDbSet.Object);
+            _mockContext.Setup(c => c.GameScores).Returns(mockGameScoresDbSet.Object);
+            _mockContext.Setup(c => c.GameParticipants).Returns(mockGameParticipantsDbSet.Object);
+
+            _mockScoreboardService.Setup(s => s.CalculateScoreboardAsync(gameId))
+                .ReturnsAsync(new ScoreboardViewModel { TeamScores = new List<TeamScore>() });
+
+            // ACT
+            await _service.EndGameAsync(gameId);
+
+            // ASSERT
+            mockGameEventsDbSet.Verify(m => m.Add(It.IsAny<GameEvent>()), Times.Exactly(2));
+            game.Status.ShouldBe(GameStatus.Finished);
+        }
+
+        [Fact]
+        public async Task EndGameAsync_ShouldSaveFinalScoresForParticipants()
+        {
+            // ARRANGE
+            var gameId = 22;
+            var userId = "user123";
+            var userName = "Team Red";
+
+            var game = new Game
+            {
+                Id = gameId,
+                Name = "Game With Participants",
+                Status = GameStatus.Active,
+                StartTime = DateTime.UtcNow,
+                EndTime = DateTime.UtcNow.AddHours(1)
+            };
+
+            var user = new ApplicationUser
+            {
+                Id = userId,
+                UserName = userName,
+                ColorHex = "#FF0000"
+            };
+
+            var participants = new List<GameParticipant>
+    {
+        new GameParticipant { GameId = gameId, ApplicationUserId = userId, ApplicationUser = user }
+    }.AsQueryable();
+
+            var mockParticipantsDbSet = MockDbSetHelper.GetMockDbSet(participants);
+            var mockGameScoresDbSet = MockDbSetHelper.GetMockDbSet(new List<GameScore>().AsQueryable());
+            var mockCpDbSet = MockDbSetHelper.GetMockDbSet(new List<ControlPoint>().AsQueryable());
+            var mockGameEventsDbSet = MockDbSetHelper.GetMockDbSet(new List<GameEvent>().AsQueryable());
+
+            _mockContext.Setup(c => c.Games.FindAsync(gameId)).ReturnsAsync(game);
+            _mockContext.Setup(c => c.GameParticipants).Returns(mockParticipantsDbSet.Object);
+            _mockContext.Setup(c => c.GameScores).Returns(mockGameScoresDbSet.Object);
+            _mockContext.Setup(c => c.ControlPoints).Returns(mockCpDbSet.Object);
+            _mockContext.Setup(c => c.GameEvents).Returns(mockGameEventsDbSet.Object);
+
+            var scoreboard = new ScoreboardViewModel
+            {
+                TeamScores = new List<TeamScore>
+        {
+            new TeamScore { TeamName = userName, TotalScoreFromDb = 500 }
+        }
+            };
+
+            _mockScoreboardService.Setup(s => s.CalculateScoreboardAsync(gameId))
+                .ReturnsAsync(scoreboard);
+
+            // ACT
+            await _service.EndGameAsync(gameId);
+
+            // ASSERT
+            mockGameScoresDbSet.Verify(m => m.Add(It.Is<GameScore>(gs =>
+                gs.GameId == gameId &&
+                gs.ApplicationUserId == userId &&
+                gs.Points == 500)), Times.Once);
+            game.Status.ShouldBe(GameStatus.Finished);
+        }
+
+        [Fact]
+        public async Task EndGameAsync_WithInvalidGameId_ShouldReturnEarly()
+        {
+            // ARRANGE
+            var invalidGameId = -1;
+
+            // ACT
+            await _service.EndGameAsync(invalidGameId);
+
+            // ASSERT
+            _mockContext.Verify(c => c.Games.FindAsync(It.IsAny<int>()), Times.Never);
+            _mockContext.Verify(c => c.SaveChangesAsync(default), Times.Never);
+        }
+
+        [Fact]
+        public async Task EndGameAsync_WithZeroGameId_ShouldReturnEarly()
+        {
+            // ARRANGE & ACT
+            await _service.EndGameAsync(0);
+
+            // ASSERT
+            _mockContext.Verify(c => c.Games.FindAsync(It.IsAny<int>()), Times.Never);
+            _mockContext.Verify(c => c.SaveChangesAsync(default), Times.Never);
+        }
+
+        [Fact]
+        public async Task EndGameAsync_WithFinishedGame_ShouldNotEnd()
+        {
+            // ARRANGE
+            var gameId = 23;
+            var game = new Game
+            {
+                Id = gameId,
+                Name = "Already Finished",
+                Status = GameStatus.Finished,
+                StartTime = DateTime.UtcNow,
+                EndTime = DateTime.UtcNow.AddHours(1)
+            };
+
+            _mockContext.Setup(c => c.Games.FindAsync(gameId)).ReturnsAsync(game);
+
+            // ACT
+            await _service.EndGameAsync(gameId);
+
+            // ASSERT
+            game.Status.ShouldBe(GameStatus.Finished);
+            _mockContext.Verify(c => c.SaveChangesAsync(default), Times.Never);
+        }
+
+        [Fact]
+        public async Task EndGameAsync_ShouldSetAllControlPointsToInactive()
+        {
+            // ARRANGE
+            var gameId = 24;
+            var game = new Game
+            {
+                Id = gameId,
+                Name = "Game To End",
+                Status = GameStatus.Active,
+                StartTime = DateTime.UtcNow,
+                EndTime = DateTime.UtcNow.AddHours(1)
+            };
+
+            var controlPoints = new List<ControlPoint>
+    {
+        new ControlPoint { Id = 1, GameId = gameId, Status = ControlPointStatus.Controlled, ApplicationUserId = "user1" },
+        new ControlPoint { Id = 2, GameId = gameId, Status = ControlPointStatus.Controlled, ApplicationUserId = "user2" }
+    }.AsQueryable();
+
+            var mockCpDbSet = MockDbSetHelper.GetMockDbSet(controlPoints);
+
+            _mockContext.Setup(c => c.Games.FindAsync(gameId)).ReturnsAsync(game);
+            _mockContext.Setup(c => c.ControlPoints).Returns(mockCpDbSet.Object);
+            _mockContext.Setup(c => c.GameEvents).Returns(MockDbSetHelper.GetMockDbSet(new List<GameEvent>().AsQueryable()).Object);
+            _mockContext.Setup(c => c.GameScores).Returns(MockDbSetHelper.GetMockDbSet(new List<GameScore>().AsQueryable()).Object);
+            _mockContext.Setup(c => c.GameParticipants).Returns(MockDbSetHelper.GetMockDbSet(new List<GameParticipant>().AsQueryable()).Object);
+
+            _mockScoreboardService.Setup(s => s.CalculateScoreboardAsync(gameId))
+                .ReturnsAsync(new ScoreboardViewModel { TeamScores = new List<TeamScore>() });
+
+            // ACT
+            await _service.EndGameAsync(gameId);
+
+            // ASSERT - Control points should be set to inactive
+            foreach (var cp in controlPoints)
+            {
+                cp.Status.ShouldBe(ControlPointStatus.Inactive);
+                cp.ApplicationUserId.ShouldBeNull();
+            }
+            game.Status.ShouldBe(GameStatus.Finished);
+        }
+
+        #endregion
+
+
+
     }
 }

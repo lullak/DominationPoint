@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,8 +14,8 @@ using System.Threading.Tasks;
 
 public class CustomWebApplicationFactory<TStartup> : WebApplicationFactory<TStartup> where TStartup : class
 {
-    // Static database name shared across all instances
-    private static readonly string DatabaseName = $"TestDb_{Guid.NewGuid()}";
+    // Instance-based database name - each factory instance gets its own DB
+    private readonly string _databaseName = $"TestDb_{Guid.NewGuid()}";
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -39,7 +38,7 @@ public class CustomWebApplicationFactory<TStartup> : WebApplicationFactory<TStar
 
         builder.ConfigureTestServices(services =>
         {
-            // CRITICAL: Remove the existing DbContext registration
+            // Remove the existing DbContext registration
             var descriptor = services.SingleOrDefault(
                 d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
             if (descriptor != null)
@@ -47,14 +46,13 @@ public class CustomWebApplicationFactory<TStartup> : WebApplicationFactory<TStar
                 services.Remove(descriptor);
             }
 
-            // Add in-memory database with PERSISTENT name
+            // Add in-memory database with instance-specific name
             services.AddDbContext<ApplicationDbContext>(options =>
             {
-                // Use the SAME database name across all requests
-                options.UseInMemoryDatabase(DatabaseName);
+                options.UseInMemoryDatabase(_databaseName);
             });
 
-            // Build and seed ONCE
+            // Build and seed
             var sp = services.BuildServiceProvider();
             using (var scope = sp.CreateScope())
             {
@@ -64,8 +62,6 @@ public class CustomWebApplicationFactory<TStartup> : WebApplicationFactory<TStar
                 var roleManager = scopedServices.GetRequiredService<RoleManager<IdentityRole>>();
 
                 db.Database.EnsureCreated();
-
-                // Seed the database
                 SeedAsync(userManager, roleManager).GetAwaiter().GetResult();
             }
         });
@@ -90,7 +86,7 @@ public class CustomWebApplicationFactory<TStartup> : WebApplicationFactory<TStar
         {
             var newUser = new ApplicationUser
             {
-                UserName = "team.red@test.com",  // MUST match email
+                UserName = "team.red@test.com",
                 Email = "team.red@test.com",
                 EmailConfirmed = true,
                 ColorHex = "#FF0000",
