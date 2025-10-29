@@ -88,3 +88,6 @@ The application will automatically:
 ### Unit Tests and Integration tests (91%+ Coverage) coverlet image will be found in the project's root directory as 'coverage.png'
 ### Playwright Tests (31 tests)
 ### Lighthouse Performance Report (83+ Scores) will be found in the project's root directory as 'lighthouse.png'
+
+![Coverage]([https://github.com/adam-p/markdown-here/raw/master/src/common/images/icon48.png](https://github.com/lullak/DominationPoint/blob/master/Coverage.png?raw=true) "Coverage")
+![Lighthouse](https://github.com/adam-p/markdown-here/raw/master/src/common/images/icon48.png "Lighthouse")
