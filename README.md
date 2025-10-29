@@ -85,7 +85,7 @@ The application will automatically:
 
 ## 🧪 Testing
 
-### Unit Tests and Integration tests (91%+ Coverage) coverlet image will be found in the project's root directory as 'coverage.png'
+### Unit Tests and Integration tests (91%+ Coverage, 507 tests) coverlet image will be found in the project's root directory as 'coverage.png'
 ### Playwright Tests (31 tests)
 ### Lighthouse Performance Report (83+ Scores) will be found in the project's root directory as 'lighthouse.png'
 
