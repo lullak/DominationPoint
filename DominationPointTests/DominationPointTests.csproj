@@ -14,6 +14,11 @@
     <!-- semicolon-separated file glob patterns -->
     <ExcludeByFile>**/Migrations/*.cs</ExcludeByFile>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="UITests\**" />
+    <EmbeddedResource Remove="UITests\**" />
+    <None Remove="UITests\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4">
@@ -42,7 +47,6 @@
 
   <ItemGroup>
     <Folder Include="TestResults\" />
-    <Folder Include="UITests\" />
   </ItemGroup>
 
   <ItemGroup>
