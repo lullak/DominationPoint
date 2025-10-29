@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DominationPoint", "Dominati
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DominationPointTests", "DominationPointTests\DominationPointTests.csproj", "{6D1D79E0-CF6F-405C-85E7-F896326EF50E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PlaywrightTests", "PlaywrightTests\PlaywrightTests.csproj", "{D03F7D36-42B7-4B57-832E-6008BAFB1714}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{6D1D79E0-CF6F-405C-85E7-F896326EF50E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6D1D79E0-CF6F-405C-85E7-F896326EF50E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6D1D79E0-CF6F-405C-85E7-F896326EF50E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D03F7D36-42B7-4B57-832E-6008BAFB1714}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D03F7D36-42B7-4B57-832E-6008BAFB1714}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D03F7D36-42B7-4B57-832E-6008BAFB1714}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D03F7D36-42B7-4B57-832E-6008BAFB1714}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
