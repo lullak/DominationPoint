@@ -89,5 +89,5 @@ The application will automatically:
 ### Playwright Tests (31 tests)
 ### Lighthouse Performance Report (83+ Scores) will be found in the project's root directory as 'lighthouse.png'
 
-![Coverage](https://github.com/adam-p/markdown-here/raw/master/src/common/images/icon48.png "Coverage")
-![Lighthouse](https://github.com/adam-p/markdown-here/raw/master/src/common/images/icon48.png "Lighthouse")
+![Coverage](https://github.com/lullak/DominationPoint/blob/master/Coverage.png?raw=true "Coverage")
+![Lighthouse](https://github.com/lullak/DominationPoint/blob/master/Lighthouse.png?raw=true "Lighthouse")
