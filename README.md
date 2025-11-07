@@ -3,7 +3,7 @@
 A real-time territorial control game management system built with ASP.NET Core 9.0, featuring live game tracking, team management, and automated scoring.
 
 [![.NET](https://img.shields.io/badge/.NET-9.0-512BD4)](https://dotnet.microsoft.com/)
-[![Tests](https://img.shields.io/badge/tests-31%20E2E%20%2B%20500%2B%20unit-success)](tests)
+[![Tests](https://img.shields.io/badge/tests-31%20E2E%20%2B%20500%2B%20unit/integration-success)](tests)
 
 
 ## ✨ Features
